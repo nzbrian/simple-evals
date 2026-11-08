@@ -15,7 +15,8 @@ OPENAI_SYSTEM_MESSAGE_CHATGPT = (
 
 class ChatCompletionSampler(SamplerBase):
     """
-    Sample from OpenAI's chat completion API
+    Sample from an OpenAI chat completions API, or any OpenAI-compatible
+    endpoint (e.g. vLLM, Ollama, LM Studio, OpenRouter, Together, Groq).
     """
 
     def __init__(
@@ -24,14 +25,29 @@ class ChatCompletionSampler(SamplerBase):
         system_message: str | None = None,
         temperature: float = 0.5,
         max_tokens: int = 1024,
+        base_url: str | None = None,
+        api_key: str | None = None,
+        extra_body: dict | None = None,
     ):
+        """
+        Args:
+            base_url: Base URL of the endpoint, e.g. "http://localhost:8000/v1".
+                Defaults to the OPENAI_BASE_URL environment variable, then to
+                the official OpenAI API.
+            api_key: API key for the endpoint. Defaults to the OPENAI_API_KEY
+                environment variable. Pass any non-empty string (e.g. "dummy")
+                for local servers that do not require authentication.
+            extra_body: Extra keys merged into the request body. Used for
+                endpoint-specific options, e.g. disabling thinking on reasoning
+                models: {"chat_template_kwargs": {"enable_thinking": False}}.
+        """
         self.api_key_name = "OPENAI_API_KEY"
-        self.client = OpenAI()
-        # using api_key=os.environ.get("OPENAI_API_KEY")  # please set your API_KEY
+        self.client = OpenAI(base_url=base_url, api_key=api_key)
         self.model = model
         self.system_message = system_message
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.extra_body = extra_body
         self.image_format = "url"
 
     def _handle_image(
@@ -65,9 +81,10 @@ class ChatCompletionSampler(SamplerBase):
             try:
                 response = self.client.chat.completions.create(
                     model=self.model,
-                    messages=message_list,
+                    messages=message_list,  # type: ignore[arg-type]
                     temperature=self.temperature,
                     max_tokens=self.max_tokens,
+                    extra_body=self.extra_body,
                 )
                 content = response.choices[0].message.content
                 if content is None:

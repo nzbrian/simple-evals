@@ -90,6 +90,7 @@ We have implemented sampling interfaces for the following language model APIs:
 
 - OpenAI: https://platform.openai.com/docs/overview
 - Claude: https://www.anthropic.com/api
+- Any OpenAI-compatible endpoint (e.g. vLLM, Ollama, LM Studio, OpenRouter, Together, Groq): see [Testing any OpenAI-compatible API](#testing-any-openai-compatible-api)
 
 Make sure to set the `*_API_KEY` environment variables before using these APIs.
 
@@ -125,12 +126,39 @@ python -m simple-evals.simple_evals --model <model_name> --examples <num_example
 ```
 This will launch evaluations through the OpenAI API.
 
+## Testing any OpenAI-compatible API
+
+Any server that exposes an OpenAI-compatible `/v1/chat/completions` endpoint (vLLM, Ollama, LM Studio, OpenRouter, Together, Groq, LiteLLM, etc.) can be tested. Point the tool at it with `--base-url` (or the `OPENAI_BASE_URL` environment variable) and `--api-key` (or `OPENAI_API_KEY`; local servers that don't require auth can use any placeholder such as `dummy`):
+
+```bash
+# Test a model served by a local vLLM server
+python -m simple-evals.simple_evals \
+    --model my-llama \
+    --model-name meta-llama/Llama-3.1-8B-Instruct \
+    --base-url http://localhost:8000/v1 \
+    --api-key dummy \
+    --eval mmlu,math --examples 20
+```
+
+New flags:
+
+| Flag | Purpose |
+|:-----|:--------|
+| `--base-url` | Base URL of the OpenAI-compatible endpoint (defaults to `$OPENAI_BASE_URL`, then the official OpenAI API). |
+| `--api-key` | API key for the endpoint (defaults to `$OPENAI_API_KEY`, then `dummy`). |
+| `--model-name` | The model ID to send to the API. When set, `--model` is just the label used in result files, so any model ID can be tested. Without `--model`, the model ID is used as the label. |
+| `--grader-model` | Model ID used for LLM grading (SimpleQA, BrowseComp, HealthBench) and math equality checking. Defaults to the model under test when a custom `--base-url` is in use, otherwise `gpt-4.1-2025-04-14`. |
+| `--no-system-message` | Do not prepend the default OpenAI system message to the model under test (useful for local models that ignore or reject it). |
+| `--no-thinking` | Disable thinking for reasoning models (Qwen3, DeepSeek-R1, ...) by sending `chat_template_kwargs={enable_thinking: false}`. Without this, such models return their answer in `reasoning_content` and leave `content` empty, scoring 0. |
+
+For other endpoint-specific request options, the `ChatCompletionSampler` also accepts an `extra_body` dict that is merged into the request body (e.g. `reasoning_effort`, custom `chat_template_kwargs`).
+
+When a custom `--base-url` is set, the model under test **and** all grading models use that endpoint, so a run is fully self-contained against a single server. To grade with a different (e.g. stronger) model, pass `--grader-model`.
+
 ## Notes
 
 [^1]:chatgpt system message: "You are ChatGPT, a large language model trained by OpenAI, based on the GPT-4 architecture.\nKnowledge cutoff: 2023-12\nCurrent date: 2024-04-01"
 [^2]:assistant system message in [OpenAI API doc](https://platform.openai.com/docs/api-reference/introduction): "You are a helpful assistant." .
-[^3]:claude-3 empty system message: suggested by Anthropic API doc, and we have done limited experiments due to [rate limit](https://docs.anthropic.com/claude/reference/rate-limits) issues, but we welcome PRs with alternative choices.
-[^4]:claude-3 lmsys system message: system message in LMSYS [Fast-chat open source code](https://github.com/lm-sys/FastChat/blob/7899355ebe32117fdae83985cf8ee476d2f4243f/fastchat/conversation.py#L894): "The assistant is Claude, created by Anthropic. The current date is {{currentDateTime}}. Claude's knowledge base was last updated ... ". We have done limited experiments due to [rate limit](https://docs.anthropic.com/claude/reference/rate-limits) issues, but we welcome PRs with alternative choices.
 [^5]:We believe these evals are saturated for our newer models, but are reporting them for completeness.
 [^6]:For newer models (anything on or after o1) we evaluate on [MATH-500](https://github.com/openai/prm800k/tree/main/prm800k/math_splits), which is a newer, IID version of MATH.
 [^7]:o-series models do not support using a system prompt.

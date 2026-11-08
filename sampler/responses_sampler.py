@@ -10,7 +10,8 @@ from ..types import MessageList, SamplerBase, SamplerResponse
 
 class ResponsesSampler(SamplerBase):
     """
-    Sample from OpenAI's responses API
+    Sample from an OpenAI responses API, or any OpenAI-compatible endpoint
+    that implements /v1/responses.
     """
 
     def __init__(
@@ -21,10 +22,23 @@ class ResponsesSampler(SamplerBase):
         max_tokens: int = 1024,
         reasoning_model: bool = False,
         reasoning_effort: str | None = None,
+        base_url: str | None = None,
+        api_key: str | None = None,
     ):
+        """
+        Args:
+            base_url: Base URL of the endpoint, e.g. "http://localhost:8000/v1".
+                Defaults to the OPENAI_BASE_URL environment variable, then to
+                the official OpenAI API.
+            api_key: API key for the endpoint. Defaults to the OPENAI_API_KEY
+                environment variable. Pass any non-empty string (e.g. "dummy")
+                for local servers that do not require authentication.
+        """
         self.api_key_name = "OPENAI_API_KEY"
-        assert os.environ.get("OPENAI_API_KEY"), "Please set OPENAI_API_KEY"
-        self.client = OpenAI()
+        assert api_key or os.environ.get(
+            "OPENAI_API_KEY"
+        ), "Please set OPENAI_API_KEY or pass api_key"
+        self.client = OpenAI(base_url=base_url, api_key=api_key)
         self.model = model
         self.system_message = system_message
         self.temperature = temperature
@@ -68,13 +82,13 @@ class ResponsesSampler(SamplerBase):
                     )
                     response = self.client.responses.create(
                         model=self.model,
-                        input=message_list,
-                        reasoning=reasoning,
+                        input=message_list,  # type: ignore[arg-type]
+                        reasoning=reasoning,  # type: ignore[arg-type]
                     )
                 else:
                     response = self.client.responses.create(
                         model=self.model,
-                        input=message_list,
+                        input=message_list,  # type: ignore[arg-type]
                         temperature=self.temperature,
                         max_output_tokens=self.max_tokens,
                     )
