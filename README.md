@@ -1,9 +1,3 @@
-# ⚠️ Deprecation Notice
-
-**July 2025**: `simple-evals` will no longer be updated for new models or benchmark results. The repo will continue to host reference implementations for **HealthBench**, **BrowseComp**, and **SimpleQA**.
-
----
-
 # Overview
 This repository contains a lightweight library for evaluating language models.
 We are open sourcing it so we can be transparent about the accuracy numbers we're publishing alongside our latest models.
@@ -96,23 +90,21 @@ Make sure to set the `*_API_KEY` environment variables before using these APIs.
 
 ## Setup
 
-Due to the optional dependencies, we're not providing a unified setup mechanism. Instead, we're providing instructions for each eval and sampler.
+Install all dependencies in one step:
 
-For [HumanEval](https://github.com/openai/human-eval/) (python programming)
 ```bash
-git clone https://github.com/openai/human-eval
-pip install -e human-eval
+pip install -r requirements.txt
 ```
 
-For the [OpenAI API](https://pypi.org/project/openai/):
-```bash
-pip install openai
-```
+This installs everything `simple_evals.py` needs (it imports every eval at module load): the OpenAI and Anthropic clients, plus the per-eval dependencies (`scipy` for DROP, `blobfile` for HealthBench, `human-eval` for HumanEval, and `tabulate` for the results table).
 
-For the [Anthropic API](https://docs.anthropic.com/claude/docs/quickstart-guide):
-```bash
-pip install anthropic
-```
+<details>
+<summary>Individual packages (if you only need a subset)</summary>
+
+- [OpenAI API](https://pypi.org/project/openai/): `pip install openai`
+- [Anthropic API](https://docs.anthropic.com/claude/docs/quickstart-guide): `pip install anthropic`
+- [HumanEval](https://github.com/openai/human-eval/) (python programming): `pip install human-eval`
+</details>
 
 ## Running the evals
 ```bash
@@ -128,17 +120,35 @@ This will launch evaluations through the OpenAI API.
 
 ## Testing any OpenAI-compatible API
 
-Any server that exposes an OpenAI-compatible `/v1/chat/completions` endpoint (vLLM, Ollama, LM Studio, OpenRouter, Together, Groq, LiteLLM, etc.) can be tested. Point the tool at it with `--base-url` (or the `OPENAI_BASE_URL` environment variable) and `--api-key` (or `OPENAI_API_KEY`; local servers that don't require auth can use any placeholder such as `dummy`):
+Any server that exposes an OpenAI-compatible `/v1/chat/completions` endpoint can be tested. The examples below use [llama.cpp](https://github.com/ggml-org/llama.cpp)'s `llama-server` as the default, but the same flags work with vLLM, Ollama, LM Studio, OpenRouter, Together, Groq, LiteLLM, etc. Point the tool at your server with `--base-url` (or the `OPENAI_BASE_URL` environment variable) and `--api-key` (or `OPENAI_API_KEY`; local servers that don't require auth can use any placeholder such as `dummy`).
+
+### 1. Start a llama.cpp server
+
+Build llama.cpp, then serve a GGUF model. Give the server **enough parallel slots** to absorb the eval's concurrency (the evals issue many threads at once; too few slots causes `Context size has been exceeded` errors and hangs). With `-np N` slots, set `-c` to the *total* context (each slot gets `-c / N`):
 
 ```bash
-# Test a model served by a local vLLM server
-python -m simple-evals.simple_evals \
-    --model my-llama \
-    --model-name meta-llama/Llama-3.1-8B-Instruct \
-    --base-url http://localhost:8000/v1 \
-    --api-key dummy \
-    --eval mmlu,math --examples 20
+# Serve a GGUF model on port 8080, all layers on the GPU.
+# 16 slots x 2048 ctx each = -c 32768 total. Tune -np / -c to your GPU memory.
+llama-server \
+    -m /path/to/model.gguf \
+    --host 127.0.0.1 --port 8080 \
+    -ngl 99 -c 32768 -np 16
 ```
+
+### 2. Run the evals against it
+
+```bash
+python -m simple-evals.simple_evals \
+    --model my-model \
+    --model-name /path/to/model.gguf \
+    --base-url http://localhost:8080/v1 \
+    --api-key dummy \
+    --eval mmlu,math,gpqa --examples 20
+```
+
+Add `--no-thinking` for reasoning models (Qwen3, DeepSeek-R1, ...) so they answer directly instead of filling `reasoning_content`.
+
+> **Note:** with `--examples N` you must use `--n-repeats 1` for the `math` and `gpqa` evals. For a full run, omit `--examples` and set `--n-repeats` (e.g. `--n-repeats 4`).
 
 New flags:
 
@@ -157,7 +167,6 @@ When a custom `--base-url` is set, the model under test **and** all grading mode
 
 ## Notes
 
-[^1]:chatgpt system message: "You are ChatGPT, a large language model trained by OpenAI, based on the GPT-4 architecture.\nKnowledge cutoff: 2023-12\nCurrent date: 2024-04-01"
 [^2]:assistant system message in [OpenAI API doc](https://platform.openai.com/docs/api-reference/introduction): "You are a helpful assistant." .
 [^5]:We believe these evals are saturated for our newer models, but are reporting them for completeness.
 [^6]:For newer models (anything on or after o1) we evaluate on [MATH-500](https://github.com/openai/prm800k/tree/main/prm800k/math_splits), which is a newer, IID version of MATH.

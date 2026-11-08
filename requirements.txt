@@ -1,0 +1,21 @@
+# Dependencies for simple-evals.
+#
+# simple_evals.py imports every eval at module load, so all of the packages
+# below are needed to run it. Install with:
+#
+#     pip install -r requirements.txt
+#
+# Core (common.py + the OpenAI/Claude samplers + the main runner)
+openai
+anthropic
+jinja2
+numpy
+requests
+tqdm
+pandas
+tabulate            # pandas .to_markdown() for the results summary table
+
+# Per-eval dependencies
+scipy               # DROP eval (scipy.optimize.linear_sum_assignment)
+blobfile            # HealthBench / HealthBenchMeta evals
+human-eval          # HumanEval eval
